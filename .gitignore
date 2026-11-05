@@ -1,0 +1,21 @@
+## .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+publish/
+*.user
+*.suo
+.vs/
+
+## Local environment / secrets
+.env
+.env.local
+.venv/
+venv/
+
+## OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
