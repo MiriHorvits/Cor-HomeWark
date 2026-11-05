@@ -1,6 +1,75 @@
 @_2026_10_06_HostAddress = http://localhost:5077
 
-GET {{_2026_10_06_HostAddress}}/weatherforecast/
+### כל הטיסות
+GET {{_2026_10_06_HostAddress}}/api/flights
 Accept: application/json
+
+### טיסה לפי מזהה
+GET {{_2026_10_06_HostAddress}}/api/flights/1
+Accept: application/json
+
+### מקומות פנויים בטיסה
+GET {{_2026_10_06_HostAddress}}/api/flights/1/seats
+Accept: application/json
+
+### סיכום סטטיסטי
+GET {{_2026_10_06_HostAddress}}/api/flights/stats
+Accept: application/json
+
+### חיפוש טיסות
+POST {{_2026_10_06_HostAddress}}/api/flights/search
+Content-Type: application/json
+
+{
+  "origin": "TLV",
+  "destination": "LHR",
+  "departureDate": "2026-11-15"
+}
+
+### הזמנת טיסה
+POST {{_2026_10_06_HostAddress}}/api/flights/book
+Content-Type: application/json
+
+{
+  "flightId": 1,
+  "passengerName": "Passenger 1",
+  "passengerId": "000000001",
+  "passengerCount": 2
+}
+
+### עדכון מחיר ומקומות (מנהל)
+PATCH {{_2026_10_06_HostAddress}}/api/flights/1
+Content-Type: application/json
+
+{
+  "price": 399.90,
+  "availableSeats": 25
+}
+
+### כל ההזמנות הפעילות
+GET {{_2026_10_06_HostAddress}}/api/bookings
+Accept: application/json
+
+### הזמנה לפי מספר
+GET {{_2026_10_06_HostAddress}}/api/bookings/AAAAAAAA
+Accept: application/json
+
+### ביטול הזמנה
+DELETE {{_2026_10_06_HostAddress}}/api/bookings/AAAAAAAA
+
+### כל הנוסעים
+GET {{_2026_10_06_HostAddress}}/api/passengers
+Accept: application/json
+
+### רישום נוסע
+POST {{_2026_10_06_HostAddress}}/api/passengers
+Content-Type: application/json
+
+{
+  "fullName": "Passenger 1",
+  "passengerId": "000000001",
+  "email": "passenger1@example.com",
+  "phone": "000-0000000"
+}
 
 ###

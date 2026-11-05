@@ -1,5 +1,5 @@
 
-using _2026_10_06.Controllers;
+using _2026_10_06.Models;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -7,6 +7,7 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddSingleton<FlightStore>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {

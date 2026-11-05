@@ -7,68 +7,23 @@ namespace _2026_10_06.Controllers;
 [Route("api/[controller]")]
 public class FlightsController : ControllerBase
 {
-    private static readonly List<Flight> Flights = new()
+    private readonly FlightStore _store;
+
+    public FlightsController(FlightStore store)
     {
-        new Flight
-        {
-            Id = 1,
-            Airline = "El Al",
-            FlightNumber = "LY 101",
-            Origin = "TLV",
-            Destination = "LHR",
-            DepartureTime = new DateTime(2026, 11, 15, 18, 30, 0),
-            ArrivalTime = new DateTime(2026, 11, 15, 20, 45, 0),
-            Price = 349.90m,
-            AvailableSeats = 22
-        },
-        new Flight
-        {
-            Id = 2,
-            Airline = "Turkish Airlines",
-            FlightNumber = "TK 205",
-            Origin = "TLV",
-            Destination = "IST",
-            DepartureTime = new DateTime(2026, 11, 16, 8, 15, 0),
-            ArrivalTime = new DateTime(2026, 11, 16, 10, 30, 0),
-            Price = 289.50m,
-            AvailableSeats = 18
-        },
-        new Flight
-        {
-            Id = 3,
-            Airline = "Delta",
-            FlightNumber = "DL 441",
-            Origin = "JFK",
-            Destination = "LAX",
-            DepartureTime = new DateTime(2026, 11, 20, 14, 0, 0),
-            ArrivalTime = new DateTime(2026, 11, 20, 17, 25, 0),
-            Price = 520.00m,
-            AvailableSeats = 12
-        },
-        new Flight
-        {
-            Id = 4,
-            Airline = "Air France",
-            FlightNumber = "AF 886",
-            Origin = "CDG",
-            Destination = "JFK",
-            DepartureTime = new DateTime(2026, 11, 19, 21, 10, 0),
-            ArrivalTime = new DateTime(2026, 11, 19, 23, 40, 0),
-            Price = 410.75m,
-            AvailableSeats = 9
-        }
-    };
+        _store = store;
+    }
 
     [HttpGet]
     public ActionResult<IEnumerable<Flight>> GetAllFlights()
     {
-        return Ok(Flights);
+        return Ok(_store.Flights);
     }
 
     [HttpGet("{id:int}")]
     public ActionResult<Flight> GetFlightById(int id)
     {
-        var flight = Flights.FirstOrDefault(f => f.Id == id);
+        var flight = _store.FindFlight(id);
 
         if (flight is null)
         {
@@ -78,10 +33,66 @@ public class FlightsController : ControllerBase
         return Ok(flight);
     }
 
+    [HttpGet("{id:int}/seats")]
+    public ActionResult<object> GetSeatAvailability(int id)
+    {
+        var flight = _store.FindFlight(id);
+
+        if (flight is null)
+        {
+            return NotFound($"Flight with id {id} was not found.");
+        }
+
+        return Ok(new
+        {
+            flight.Id,
+            flight.FlightNumber,
+            flight.AvailableSeats
+        });
+    }
+
+    [HttpGet("stats")]
+    public ActionResult<FlightStats> GetStats()
+    {
+        var flights = _store.Flights;
+
+        if (flights.Count == 0)
+        {
+            return Ok(new FlightStats());
+        }
+
+        var stats = new FlightStats
+        {
+            TotalFlights = flights.Count,
+            TotalAvailableSeats = flights.Sum(f => f.AvailableSeats),
+            AveragePrice = Math.Round(flights.Average(f => f.Price), 2),
+            PotentialRevenue = flights.Sum(f => f.Price * f.AvailableSeats),
+            ByDestination = flights
+                .GroupBy(f => f.Destination)
+                .Select(g => new DestinationStats
+                {
+                    Destination = g.Key,
+                    Flights = g.Count(),
+                    CheapestPrice = g.Min(f => f.Price)
+                })
+                .OrderBy(d => d.Destination)
+                .ToList()
+        };
+
+        return Ok(stats);
+    }
+
     [HttpPost("search")]
     public ActionResult<IEnumerable<Flight>> SearchFlights([FromBody] FlightSearchRequest request)
     {
-        var result = Flights.AsEnumerable();
+        if (request.Origin is not null
+            && request.Destination is not null
+            && request.Origin.Trim().Equals(request.Destination.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest("Origin and destination must be different.");
+        }
+
+        var result = _store.Flights.AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(request.Origin))
         {
@@ -109,7 +120,12 @@ public class FlightsController : ControllerBase
             return BadRequest("Passenger count must be at least 1.");
         }
 
-        var flight = Flights.FirstOrDefault(f => f.Id == request.FlightId);
+        if (string.IsNullOrWhiteSpace(request.PassengerName))
+        {
+            return BadRequest("Passenger name is required.");
+        }
+
+        var flight = _store.FindFlight(request.FlightId);
 
         if (flight is null)
         {
@@ -123,20 +139,45 @@ public class FlightsController : ControllerBase
 
         flight.AvailableSeats -= request.PassengerCount;
 
-        var totalPrice = flight.Price * request.PassengerCount;
-
-        var booking = new BookingResponse
+        var booking = new Booking
         {
-            BookingId = Guid.NewGuid().ToString("N")[..8].ToUpper(),
+            BookingId = _store.NewBookingId(),
+            FlightId = flight.Id,
             FlightNumber = flight.FlightNumber,
             PassengerName = request.PassengerName,
+            PassengerId = request.PassengerId,
             Origin = flight.Origin,
             Destination = flight.Destination,
             DepartureTime = flight.DepartureTime,
             PassengerCount = request.PassengerCount,
-            TotalPrice = totalPrice
+            TotalPrice = flight.Price * request.PassengerCount
         };
 
-        return Ok(booking);
+        _store.Bookings.Add(booking);
+
+        return Ok(booking.ToResponse());
+    }
+
+    [HttpPatch("{id:int}")]
+    public ActionResult<Flight> UpdateFlight(int id, [FromBody] UpdateFlightRequest request)
+    {
+        var flight = _store.FindFlight(id);
+
+        if (flight is null)
+        {
+            return NotFound($"Flight with id {id} was not found.");
+        }
+
+        if (request.Price.HasValue)
+        {
+            flight.Price = request.Price.Value;
+        }
+
+        if (request.AvailableSeats.HasValue)
+        {
+            flight.AvailableSeats = request.AvailableSeats.Value;
+        }
+
+        return Ok(flight);
     }
 }
